@@ -13,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -23,7 +24,6 @@ public class Main {
     public static void client(int threadGroupSize, int numThreadGroups, int delay, String IPAddr) throws URISyntaxException, InterruptedException, IOException {
         final String getPath = "/albums/1";
         final String postPath = "/albums/";
-        final String requestBody = "{\"profile\":{\"artist\":\"hi\",\"title\":\"hello\",\"year\":\"bye\"},\"image\":\"\"}";
         Long startTime;
         List<Long> latencyList = new ArrayList<>();
         List<List<Object>> requestDataList = new ArrayList<>();
@@ -38,16 +38,33 @@ public class Main {
 
         IPAddr = IPAddr.trim();
         String boundary = UUID.randomUUID().toString();
+        File imageFile = new File("src/main/resources/nmtb.png");
+        byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
+
+        String CRLF = "\r\n";
+        String requestBody = "--" + boundary + CRLF +
+                "Content-Disposition: form-data; name=\"profile\"" + CRLF +
+                "Content-Type: application/json" + CRLF +
+                CRLF +
+                "{\"artist\":\"hi\",\"title\":\"hello\",\"year\":\"bye\"}" + CRLF +
+                "--" + boundary + CRLF +
+                "Content-Disposition: form-data; name=\"image\"; filename=\"image.png\"" + CRLF +
+                "Content-Type: application/octet-stream" + CRLF +
+                CRLF;
+
+        requestBody += new String(imageBytes, StandardCharsets.UTF_8) + CRLF;
+        requestBody += "--" + boundary + "--" + CRLF;
+
+        HttpRequest postRequest = HttpRequest.newBuilder()
+                .uri(URI.create(IPAddr + postPath))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
+                .build();
 
         HttpClient httpClient = HttpClient.newHttpClient();
         HttpRequest getRequest = HttpRequest.newBuilder()
                 .uri(URI.create(IPAddr + getPath))
                 .GET()
-                .build();
-        HttpRequest postRequest = HttpRequest.newBuilder()
-                .uri(URI.create(IPAddr + postPath))
-                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
                 .build();
 
         ExecutorService initialThreadPool = Executors.newFixedThreadPool(10);
@@ -63,6 +80,7 @@ public class Main {
                         try {
                             HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
                             HttpResponse<String> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofString());
+//                            System.out.println(postResponse.body().toString());
 
                             // Check the response codes for errors
                             if (getResponse.statusCode() >= 400 || postResponse.statusCode() >= 400) {
