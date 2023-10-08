@@ -4,16 +4,12 @@ import org.scalable.StaticVariables.StaticVariables;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class Client1 {
 
@@ -105,20 +101,12 @@ public class Client1 {
                         while (!success && retryCount < 5) {
                             try {
                                 // Get Request
-                                Long requestGetStartTime = System.currentTimeMillis();
                                 HttpResponse<String> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofString());
-                                Long requestReceivedTime = System.currentTimeMillis();
 
                                 if (getResponse.statusCode() >= 400) {
                                     retryCount++;
                                 } else {
                                     success = true;
-                                    Long requestGetEndTime = System.currentTimeMillis();
-                                    List<Object> requestData = new ArrayList<>();
-                                    requestData.add(requestGetStartTime);
-                                    requestData.add("GET");
-                                    requestData.add(requestGetEndTime - requestGetStartTime);
-                                    requestData.add(getResponse.statusCode());
                                 }
                             } catch (Exception e) {
                                 retryCount++;
@@ -147,7 +135,7 @@ public class Client1 {
         // Statistics
         long endTime = System.currentTimeMillis();
         double wallTime = (endTime - startTime) / 1000.0;
-        int totalRequests = (threadGroupSize * numThreadGroups * 1000) + 1000;  // 1000 requests from initial thread pool
+        int totalRequests = (threadGroupSize * numThreadGroups * 1000) + 2000;  // 1000 requests from initial thread pool
 
         System.out.println("\n");
         System.out.println("Total Requests: " + totalRequests + " requests");
@@ -155,7 +143,7 @@ public class Client1 {
         System.out.println("Throughput: " + totalRequests / wallTime + "req/sec");
     }
 
-    public static void main(String[] args) throws URISyntaxException {
+    public static void main(String[] args) {
         int threadGroupSize, numThreadGroups, delay;
         String IPAddr;
 
