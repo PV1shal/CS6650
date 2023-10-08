@@ -1,4 +1,4 @@
-package org.scalable;
+package org.scalable.StaticVariables;
 
 import java.io.File;
 

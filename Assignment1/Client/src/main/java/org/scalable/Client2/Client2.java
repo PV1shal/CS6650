@@ -1,7 +1,7 @@
 package org.scalable.Client2;
 
 import com.opencsv.CSVWriter;
-import org.scalable.StaticVariables;
+import org.scalable.StaticVariables.StaticVariables;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -25,7 +25,6 @@ public class Client2 {
         List<List<Object>> requestDataList = new ArrayList<>();
 
         // CSV Report file Creation/Generation.
-
         FileWriter outputFile = new FileWriter(StaticVariables.file);
         CSVWriter writer = new CSVWriter(outputFile);
         writer.writeNext(StaticVariables.header);
@@ -60,12 +59,12 @@ public class Client2 {
                 .GET()
                 .build();
 
-        ExecutorService initialThreadPool = Executors.newFixedThreadPool(10);
-        CountDownLatch initialLatch = new CountDownLatch(10);
         startTime = System.currentTimeMillis();
 
+        List<Thread> initialThreads = new ArrayList<>();
+
         for (int i = 0; i < 10; i++) {
-            initialThreadPool.submit(() -> {
+            Thread thread = new Thread(() -> {
                 for (int j = 0; j < 100; j++) {
                     int retryCount = 0;
                     boolean success = false;
@@ -73,7 +72,6 @@ public class Client2 {
                         try {
                             HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
                             HttpResponse<String> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofString());
-//                            System.out.println(postResponse.body().toString());
 
                             // Check the response codes for errors
                             if (getResponse.statusCode() >= 400 || postResponse.statusCode() >= 400) {
@@ -91,17 +89,25 @@ public class Client2 {
                         System.out.println("Request failed after 5 retries.");
                     }
                 }
-                initialLatch.countDown();
             });
+            initialThreads.add(thread);
+            thread.start();
         }
-        initialThreadPool.shutdown();
-        initialLatch.await();
 
-        ExecutorService threadPool = Executors.newFixedThreadPool(threadGroupSize);
+// Wait for all initial threads to finish
+        for (Thread thread : initialThreads) {
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        List<Thread> threads = new ArrayList<>();
 
         for (int group = 0; group < numThreadGroups; group++) {
             for (int i = 0; i < threadGroupSize; i++) {
-                threadPool.submit(() -> {
+                Thread thread = new Thread(() -> {
                     for (int j = 0; j < 1000; j++) {
                         int retryCount = 0;
                         boolean success = false;
@@ -110,10 +116,10 @@ public class Client2 {
                                 // Get Request
                                 Long requestGetStartTime = System.currentTimeMillis();
                                 HttpResponse<String> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofString());
-                                Long requestRecievedTime = System.currentTimeMillis();
+                                Long requestReceivedTime = System.currentTimeMillis();
 
                                 synchronized (latencyList) {
-                                    latencyList.add(requestRecievedTime - requestGetStartTime);
+                                    latencyList.add(requestReceivedTime - requestGetStartTime);
                                 }
 
                                 if (getResponse.statusCode() >= 400) {
@@ -139,11 +145,20 @@ public class Client2 {
                         }
                     }
                 });
+                threads.add(thread);
+                thread.start();
             }
-            Thread.sleep(delay * 1000);
+        Thread.sleep(delay * 1000);
         }
-        threadPool.shutdown();
-        threadPool.awaitTermination(Integer.MAX_VALUE, java.util.concurrent.TimeUnit.MINUTES);
+
+        for (Thread thread : threads) {
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
 
         // Statistics
         long endTime = System.currentTimeMillis();
@@ -166,9 +181,7 @@ public class Client2 {
             medianLatency = latencyList.get(latencyList.size() / 2);
         }
 
-        double littleLaw = (threadGroupSize / meanLatency) * 1000;
         double averageThroughput = totalRequests / wallTime;
-        double percentageDifference = (Math.abs((littleLaw - averageThroughput)) / ((littleLaw + averageThroughput) / 2)) * 100;
 
         System.out.println("\n");
         System.out.println("Total Requests: " + totalRequests + " requests");
@@ -179,8 +192,6 @@ public class Client2 {
         System.out.println("avg. Throughput: " + averageThroughput + " requests/second");
         System.out.println("min. Response Time: " + minResponseTime + " milliseconds");
         System.out.println("max. Response Time: " + maxResponseTime + " milliseconds");
-        System.out.println("Little's Law: " + littleLaw + " requests");
-        System.out.println("Percentage Difference: " + percentageDifference + "%");
 
         // Writing to CSV File
         for (List<Object> data : requestDataList) {
@@ -194,6 +205,7 @@ public class Client2 {
         writer.close();
         outputFile.close();
     }
+
     public static void main(String[] args) throws URISyntaxException {
         int threadGroupSize, numThreadGroups, delay;
         String IPAddr;
