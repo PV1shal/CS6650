@@ -102,6 +102,7 @@ public class Client1 {
                             try {
                                 // Get Request
                                 HttpResponse<String> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofString());
+                                HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
 
                                 if (getResponse.statusCode() >= 400) {
                                     retryCount++;
@@ -135,7 +136,7 @@ public class Client1 {
         // Statistics
         long endTime = System.currentTimeMillis();
         double wallTime = (endTime - startTime) / 1000.0;
-        int totalRequests = (threadGroupSize * numThreadGroups * 1000) + 2000;  // 1000 requests from initial thread pool
+        int totalRequests = (threadGroupSize * numThreadGroups * 1000 * 2) + 2000;  // 2000 requests from initial thread pool
 
         System.out.println("\n");
         System.out.println("Total Requests: " + totalRequests + " requests");

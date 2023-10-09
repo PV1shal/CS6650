@@ -18,7 +18,8 @@ public class Client2 {
 
     private static void client(int threadGroupSize, int numThreadGroups, int delay, String IPAddr) throws InterruptedException, IOException {
         Long startTime;
-        List<Long> latencyList = new ArrayList<>();
+        List<Long> latencyListGET = new ArrayList<>();
+        List<Long> latencyListPOST = new ArrayList<>();
         List<List<Object>> requestDataList = new ArrayList<>();
 
         // CSV Report file Creation/Generation.
@@ -110,14 +111,19 @@ public class Client2 {
                         boolean success = false;
                         while (!success && retryCount < 5) {
                             try {
-                                // Get Request
+                                // POST Request
+                                Long reqyestPostStart = System.currentTimeMillis();
+                                HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
+                                Long reqyestPostEnd = System.currentTimeMillis();
+
+                                // GET Request
                                 Long requestGetStartTime = System.currentTimeMillis();
                                 HttpResponse<String> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofString());
                                 Long requestReceivedTime = System.currentTimeMillis();
 
-                                synchronized (latencyList) {
-                                    latencyList.add(requestReceivedTime - requestGetStartTime);
-                                }
+//                                synchronized (latencyList) {
+//                                    latencyList.add(requestReceivedTime - requestGetStartTime);
+//                                }
 
                                 if (getResponse.statusCode() >= 400) {
                                     retryCount++;
@@ -129,9 +135,17 @@ public class Client2 {
                                     requestData.add("GET");
                                     requestData.add(requestGetEndTime - requestGetStartTime);
                                     requestData.add(getResponse.statusCode());
-                                    synchronized (requestDataList) {
-                                        requestDataList.add(requestData);
-                                    }
+
+
+                                    List<Object> requestData1 = new ArrayList<>();
+                                    requestData1.add(reqyestPostStart);
+                                    requestData1.add("POST");
+                                    requestData1.add(reqyestPostEnd - reqyestPostStart);
+                                    requestData1.add(postResponse.statusCode());
+//                                    synchronized (requestDataList) {
+                                    requestDataList.add(requestData);
+                                    requestDataList.add(requestData1);
+//                                    }
                                 }
                             } catch (Exception e) {
                                 retryCount++;
@@ -159,45 +173,70 @@ public class Client2 {
 
         // Statistics
         long endTime = System.currentTimeMillis();
-        double sum = 0;
+        double sumGET = 0;
+        double sumPOST = 0;
         double meanLatency;
-        double ninetyNinePercentile = latencyList.get((int) (latencyList.size() * 0.99));
         double medianLatency = 0;
         double wallTime = (endTime - startTime) / 1000.0;
-        int totalRequests = (threadGroupSize * numThreadGroups * 1000) + 1000;  // 1000 requests from initial thread pool
-        double minResponseTime = Collections.min(latencyList);
-        double maxResponseTime = Collections.max(latencyList);
+        int totalRequests = (threadGroupSize * numThreadGroups * 2000) + 2000;  // 1000 requests from initial thread pool
 
-        for (Long latency : latencyList) {
-            sum += latency;
+        // Writing to CSV File
+        for (List<Object> data : requestDataList) {
+            String[] dataArr = new String[data.size()];
+            long latency = (long) data.get(2);
+            if(data.get(1).equals("GET")) {
+                sumGET += latency;
+                latencyListGET.add(latency);
+            } else{
+                sumPOST += latency;
+                latencyListPOST.add(latency);
+            }
+            for (int i = 0; i < data.size(); i++) {
+                dataArr[i] = data.get(i).toString();
+            }
+            writer.writeNext(dataArr);
         }
-        meanLatency = sum / latencyList.size();
-        if (latencyList.size() % 2 == 0) {
-            medianLatency = (latencyList.get(latencyList.size() / 2) + latencyList.get((latencyList.size() / 2) - 1)) / 2.0;
+
+        double ninetyNinePercentile = latencyListGET.get((int) (latencyListGET.size() * 0.99));
+        double minResponseTime = Collections.min(latencyListGET);
+        double maxResponseTime = Collections.max(latencyListGET);
+        meanLatency = sumGET / latencyListGET.size();
+
+        if (latencyListGET.size() % 2 == 0) {
+            medianLatency = (latencyListGET.get(latencyListGET.size() / 2) + latencyListGET.get((latencyListGET.size() / 2) - 1)) / 2.0;
         } else {
-            medianLatency = latencyList.get(latencyList.size() / 2);
+            medianLatency = latencyListGET.get(latencyListGET.size() / 2);
+        }
+
+        double ninetyNinePercentilePOST = latencyListPOST.get((int) (latencyListPOST.size() * 0.99));
+        double minResponseTimePOST = Collections.min(latencyListPOST);
+        double maxResponseTimePOST = Collections.max(latencyListPOST);
+        double meanPostLatency = sumPOST / latencyListPOST.size();
+        double medianLatencyPOST;
+
+        if (latencyListGET.size() % 2 == 0) {
+            medianLatencyPOST = (latencyListGET.get(latencyListGET.size() / 2) + latencyListGET.get((latencyListGET.size() / 2) - 1)) / 2.0;
+        } else {
+            medianLatencyPOST = latencyListGET.get(latencyListGET.size() / 2);
         }
 
         double averageThroughput = totalRequests / wallTime;
 
         System.out.println("\n");
         System.out.println("Total Requests: " + totalRequests + " requests");
-        System.out.println("Mean Latency: " + meanLatency + " milliseconds");
-        System.out.println("Median Latency: " + medianLatency + " milliseconds");
-        System.out.println("99th Percentile Latency: " + ninetyNinePercentile + " milliseconds");
+        System.out.println("Mean GET Latency: " + meanLatency + " milliseconds");
+        System.out.println("Median GET Latency: " + medianLatency + " milliseconds");
+        System.out.println("Mean POST Latency: " + meanPostLatency + " milliseconds");
+        System.out.println("Median POST Latency: " + medianLatencyPOST + " milliseconds");
+        System.out.println("99th Percentile Latency: " + ninetyNinePercentilePOST + " milliseconds");
         System.out.println("Wall Time: " + wallTime + " seconds");
         System.out.println("avg. Throughput: " + averageThroughput + " requests/second");
-        System.out.println("min. Response Time: " + minResponseTime + " milliseconds");
-        System.out.println("max. Response Time: " + maxResponseTime + " milliseconds");
+        System.out.println("min. GET Response Time: " + minResponseTime + " milliseconds");
+        System.out.println("max. GET Response Time: " + maxResponseTime + " milliseconds");
+        System.out.println("min. POST Response Time: " + minResponseTimePOST + " milliseconds");
+        System.out.println("max. POST Response Time: " + maxResponseTimePOST + " milliseconds");
 
-        // Writing to CSV File
-        for (List<Object> data : requestDataList) {
-            String[] dataArr = new String[data.size()];
-            for (int i = 0; i < data.size(); i++) {
-                dataArr[i] = data.get(i).toString();
-            }
-            writer.writeNext(dataArr);
-        }
+
         //Closing Files
         writer.close();
         outputFile.close();
