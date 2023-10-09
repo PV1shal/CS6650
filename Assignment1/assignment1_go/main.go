@@ -51,7 +51,6 @@ func atoi(s string) int {
 }
 
 func postAlbum(c *gin.Context) {
-	var newAlbum AlbumInfo
 
 	profileJSON  := c.Request.PostFormValue("profile")
 	imageFile, _ , imageErr := c.Request.FormFile("image")
@@ -75,8 +74,8 @@ func postAlbum(c *gin.Context) {
 		}
 	}
 
-	albumID := len(albumData) + 1
-	albumData[albumID] = newAlbum
+	albumID := 10
+	// albumData[albumID] = newAlbum
 	c.IndentedJSON(http.StatusCreated, gin.H{"message": "album created successfully", "album_id": albumID, "image_size": imageSize})
 
 }
