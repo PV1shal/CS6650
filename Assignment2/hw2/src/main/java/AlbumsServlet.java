@@ -5,10 +5,20 @@ import javax.servlet.http.*;
 import javax.servlet.annotation.*;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+
+import com.mongodb.*;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.result.InsertOneResult;
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileItemFactory;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
+import org.bson.BsonValue;
+import org.bson.Document;
+import org.bson.types.ObjectId;
 
 import java.sql.*;
 import java.util.List;
@@ -16,14 +26,20 @@ import java.util.List;
 @WebServlet(name = "AlbumsServlet", value = "/AlbumsServlet")
 public class AlbumsServlet extends HttpServlet {
     Gson gson = new Gson();
+    int counter = 1;
 
+    String connectionString = "mongodb://ec2-34-219-120-94.us-west-2.compute.amazonaws.com:27017";
+    MongoClient mongoClient = MongoClients.create(connectionString);
+    MongoDatabase database = mongoClient.getDatabase("hw2");
+    MongoCollection<Document> collection = database.getCollection("albums");
     private final String badConnectionError = new Gson().toJson(new Response("Bad Request", "Invalid Request"));
+
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         String urlPath = request.getRequestURI();
 
-        if(urlPath == null || urlPath.isEmpty()) {
+        if (urlPath == null || urlPath.isEmpty()) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             response.getWriter().write(badConnectionError);
             return;
@@ -31,24 +47,14 @@ public class AlbumsServlet extends HttpServlet {
 
         String[] urlPaths = urlPath.split("/");
 
-        if(!isUrlValid(urlPaths)) {
+        if (!isUrlValid(urlPaths)) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             response.getWriter().write(badConnectionError);
         } else {
-            try(Connection connection = getConnection()) {
-                PreparedStatement statement = connection.prepareStatement(Queries.sqlSelectQuery);
-                statement.setInt(1, Integer.parseInt(urlPaths[3]));
-                ResultSet resultSet = statement.executeQuery();
-                AlbumInfo albumInfo = null;
-                while (resultSet.next()) {
-                    albumInfo = new AlbumInfo(
-                            resultSet.getString("artist"),
-                            resultSet.getString("title"),
-                            resultSet.getInt("release_year"));
-                    response.setStatus(HttpServletResponse.SC_OK);
-                    response.getWriter().write(gson.toJson(albumInfo));
-                    return;
-                }
+            try {
+                Document album = collection.find(new Document("_id", new ObjectId(urlPaths[3]))).first();
+                response.setStatus(HttpServletResponse.SC_OK);
+                response.getWriter().write(gson.toJson(album));
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -63,7 +69,7 @@ public class AlbumsServlet extends HttpServlet {
         ServletFileUpload upload = new ServletFileUpload(factory);
         int generatedKey;
 
-        try (Connection connection = getConnection()) {
+        try {
             List<FileItem> items = upload.parseRequest(request);
             byte[] imageBytes = new byte[0];
             AlbumInfo album = null;
@@ -83,27 +89,15 @@ public class AlbumsServlet extends HttpServlet {
                 }
             }
 
-            PreparedStatement preparedStatement = connection.prepareStatement(Queries.sqlInsertQuery, Statement.RETURN_GENERATED_KEYS);
-            preparedStatement.setString(1, album.getArtist());
-            preparedStatement.setString(2, album.getTitle());
-            preparedStatement.setInt(3, album.getYear());
-            preparedStatement.setBlob(4, new ByteArrayInputStream(imageBytes));
+            Document document = new Document("artist", album.getArtist()).append("title", album.getTitle()).append("year", album.getYear()).append("image", imageBytes);
+            InsertOneResult result = collection.insertOne(document);
 
-            int affectedRows = preparedStatement.executeUpdate();
-
-            if(affectedRows == 0) {
-                throw new SQLException("Created Album Failed, no rows affected");
-            }
-            try(ResultSet keys = preparedStatement.getGeneratedKeys()) {
-                if (keys.next()) {
-                    generatedKey = keys.getInt(1);
-                } else {
-                    throw new SQLException("Creating user failed, no ID obtained.");
-                }
-            }
-//            System.out.println("Key inserted: " + generatedKey);
             response.setStatus(HttpServletResponse.SC_CREATED);
-            response.getWriter().write(gson.toJson(new Response("Album Created", "Album Created with ID: " + generatedKey, "Image Size: " + imageBytes.length + " bytes")));
+            response.getWriter().write(
+                    gson.toJson(
+                            new Response("Album Created", "Album Created with ID: " + result.getInsertedId().toString(), "Image Size: " + imageBytes.length + " bytes")
+                    )
+            );
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -111,11 +105,5 @@ public class AlbumsServlet extends HttpServlet {
 
     private boolean isUrlValid(String[] urlPath) {
         return urlPath.length >= 1;
-    }
-
-
-    public Connection getConnection() throws SQLException, ClassNotFoundException {
-        Class.forName("com.mysql.cj.jdbc.Driver");
-        return DriverManager.getConnection("jdbc:mysql://albumdb.cfl1pikjmhpo.us-west-2.rds.amazonaws.com/hw2", "vishal", "Pstv!130619990809!");
     }
 }
