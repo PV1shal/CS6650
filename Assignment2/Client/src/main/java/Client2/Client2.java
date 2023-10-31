@@ -10,10 +10,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class Client2 {
@@ -43,7 +40,7 @@ public class Client2 {
                 .build();
 
         HttpRequest getRequest = HttpRequest.newBuilder()
-                .uri(java.net.URI.create(IPAddr + "albums/653dc11b8b16dc446d9c65ec"))
+                .uri(java.net.URI.create(IPAddr + "albums/65404816a0c82f5ef500dcf7"))
                 .GET()
                 .build();
 
@@ -128,6 +125,16 @@ public class Client2 {
 
         Long endTime = System.currentTimeMillis();
 
+        long[] postLatencies = responses.stream()
+                .filter(r -> r.getRequestType().equals("POST"))
+                .mapToLong(Response::getLatency)
+                .sorted().toArray();
+
+        long[] getLatencies = responses.stream()
+                .filter(r -> r.getRequestType().equals("GET"))
+                .mapToLong(Response::getLatency)
+                .sorted().toArray();
+
         int totalRequests = responses.size();
         long wallTime = (endTime - startTime) / 1000;
         double totalLatency = responses.stream().mapToLong(Response::getLatency).sum();
@@ -141,12 +148,12 @@ public class Client2 {
         double minResponseTimeGET = responses.stream().filter(r -> r.getRequestType().equals("GET")).mapToLong(Response::getLatency).min().orElse(0);
         double maxResponseTimeGET = responses.stream().filter(r -> r.getRequestType().equals("GET")).mapToLong(Response::getLatency).max().orElse(0);
         double successfulRequests = responses.stream().filter(r -> r.getStatusCode() == 200 || r.getStatusCode() == 201).count();
-        double meanGetLatency = responses.stream().filter(r -> r.getRequestType().equals("GET")).mapToLong(Response::getLatency).average().orElse(0.0);
-        double meanPostLatency = responses.stream().filter(r -> r.getRequestType().equals("POST")).mapToLong(Response::getLatency).average().orElse(0.0);
-        double medianGetLatency = responses.stream().filter(r -> r.getRequestType().equals("GET")).sorted((a, b) -> (int) (a.getLatency() - b.getLatency())).skip((int) (totalRequests / 2)).findFirst().orElse(new Response(0, "", 0, 0)).getLatency();
-        double medianPostLatency = responses.stream().filter(r -> r.getRequestType().equals("POST")).sorted((a, b) -> (int) (a.getLatency() - b.getLatency())).skip((int) (totalRequests / 2)).findFirst().orElse(new Response(0, "", 0, 0)).getLatency();
-        double p99GetLatency = responses.stream().filter(r -> r.getRequestType().equals("GET")).sorted((a, b) -> (int) (a.getLatency() - b.getLatency())).skip((int) (totalRequests * 0.99)).findFirst().orElse(new Response(0, "", 0, 0)).getLatency();
-        double p99PostLatency = responses.stream().filter(r -> r.getRequestType().equals("POST")).sorted((a, b) -> (int) (a.getLatency() - b.getLatency())).skip((int) (totalRequests * 0.99)).findFirst().orElse(new Response(0, "", 0, 0)).getLatency();
+        double meanGetLatency = getLatencies.length > 0 ? (double) Arrays.stream(getLatencies).sum() / getLatencies.length : 0;
+        double meanPostLatency = postLatencies.length > 0 ? (double) Arrays.stream(postLatencies).sum() / postLatencies.length : 0;
+        double medianGetLatency = getLatencies.length > 0 ? getLatencies[(int) (getLatencies.length / 2)] : 0;
+        double medianPostLatency = postLatencies.length > 0 ? postLatencies[(int) (postLatencies.length / 2)] : 0;
+        double p99GetLatency = getLatencies.length > 0 ? getLatencies[(int) (getLatencies.length * 0.99)] : 0;
+        double p99PostLatency = postLatencies.length > 0 ? postLatencies[(int) (postLatencies.length * 0.99)] : 0;
 
         System.out.println("Config Used: "+ "\nGroup size: " + threadGroupSize + ", Number of groups: " + numThreadGroups + ", Delay: " + delay + ", IP Address: " + IPAddr);
         System.out.println("Total requests: " + totalRequests);

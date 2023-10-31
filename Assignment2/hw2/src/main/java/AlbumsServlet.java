@@ -28,7 +28,7 @@ public class AlbumsServlet extends HttpServlet {
     Gson gson = new Gson();
     int counter = 1;
 
-    String connectionString = "mongodb://ec2-34-219-120-94.us-west-2.compute.amazonaws.com:27017";
+    String connectionString = "mongodb://ec2-54-68-149-246.us-west-2.compute.amazonaws.com:27017";
     MongoClient mongoClient = MongoClients.create(connectionString);
     MongoDatabase database = mongoClient.getDatabase("hw2");
     MongoCollection<Document> collection = database.getCollection("albums");

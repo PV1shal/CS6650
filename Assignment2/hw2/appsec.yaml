@@ -1,0 +1,5 @@
+version: 0.0
+os: linux
+files:
+  - source: /hw2.war
+    destination: /opt/tomcat8/webapps
