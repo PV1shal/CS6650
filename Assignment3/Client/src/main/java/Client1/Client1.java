@@ -46,9 +46,6 @@ public class Client1 {
 
         //RabbitMQ
 
-        String QUEUE_NAME = "HW3";
-        ConnectionFactory factory = new ConnectionFactory();
-
         for (int i = 0; i < 10; i++) {
             Thread thread = new Thread(() -> {
                 for (int j = 0; j < 10; j++) {

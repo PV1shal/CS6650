@@ -1,6 +1,8 @@
 package Client2;
 
 import Response.Response;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.opencsv.CSVWriter;
 
 import java.io.File;
@@ -39,11 +41,6 @@ public class Client2 {
                         "--" + boundary + "--\r\n"))
                 .build();
 
-        HttpRequest getRequest = HttpRequest.newBuilder()
-                .uri(java.net.URI.create(IPAddr + "albums/6541b69154de2b1a3adc76fa"))
-                .GET()
-                .build();
-
         List<Thread> threads = new ArrayList<>();
 
         for (int i = 0; i < 10; i++) {
@@ -56,14 +53,10 @@ public class Client2 {
                             long postStartTime = System.currentTimeMillis();
                             HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
                             long postEndTime = System.currentTimeMillis();
-                            long getStartTime = System.currentTimeMillis();
-                            HttpResponse<String> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofString());
-                            long getEndTime = System.currentTimeMillis();
-                            if (getResponse.statusCode() == 200 && postResponse.statusCode() == 201) {
+                            if (postResponse.statusCode() == 201) {
                                 success = true;
                             }
                             responses.add(new Response(postStartTime, "POST", postEndTime - postStartTime, postResponse.statusCode()));
-                            responses.add(new Response(getStartTime, "GET", getEndTime - getStartTime, getResponse.statusCode()));
                         } catch (IOException | InterruptedException e) {
                             retryCount++;
                         }
@@ -87,23 +80,53 @@ public class Client2 {
 
         for (int group = 0; group < numThreadGroups; group++) {
             for (int i = 0; i < threadGroupSize; i++) {
+                String finalIPAddr = IPAddr;
                 Thread thread = new Thread(() -> {
-                    for (int j = 0; j < 1000; j++) {
+                    for (int j = 0; j < 100; j++) {
                         int retryCount = 0;
                         boolean success = false;
                         while (!success && retryCount < 5) {
                             try {
+
                                 long postStartTime = System.currentTimeMillis();
                                 HttpResponse<String> postResponse = httpClient.send(postRequest, HttpResponse.BodyHandlers.ofString());
                                 long postEndTime = System.currentTimeMillis();
-                                long getStartTime = System.currentTimeMillis();
-                                HttpResponse<String> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofString());
-                                long getEndTime = System.currentTimeMillis();
-                                if (getResponse.statusCode() == 200 && postResponse.statusCode() == 201) {
+
+                                JsonObject responseBody = JsonParser.parseString(postResponse.body()).getAsJsonObject();
+                                String message = responseBody.get("message").getAsString();
+                                String id = message.substring(message.indexOf("{value=") + 7, message.length() - 1);
+
+                                // HTTP POST request to /reviews/{likeordislike}/{id}
+                                HttpRequest likeRequest = HttpRequest.newBuilder()
+                                        .uri(java.net.URI.create(finalIPAddr + "reviews/like/" + id))
+                                        .header("Content-Type", "application/json")
+                                        .POST(HttpRequest.BodyPublishers.ofString(""))
+                                        .build();
+                                HttpRequest disLikeRequest = HttpRequest.newBuilder()
+                                        .uri(java.net.URI.create(finalIPAddr + "reviews/like/" + id))
+                                        .header("Content-Type", "application/json")
+                                        .POST(HttpRequest.BodyPublishers.ofString(""))
+                                        .build();
+
+                                long getStartTimeLike1 = System.currentTimeMillis();
+                                HttpResponse<String> reviewPostResponse1 = httpClient.send(likeRequest, HttpResponse.BodyHandlers.ofString());
+                                long getEndTimeLike1 = System.currentTimeMillis();
+                                long getStartTimeLike2 = System.currentTimeMillis();
+                                HttpResponse<String> reviewPostResponse2 = httpClient.send(likeRequest, HttpResponse.BodyHandlers.ofString());
+                                long getEndTimeLike2 = System.currentTimeMillis();
+                                long getStartTimeDislike1 = System.currentTimeMillis();
+                                HttpResponse<String> reviewPostResponse = httpClient.send(disLikeRequest, HttpResponse.BodyHandlers.ofString());
+                                long getEndTimeDislike1 = System.currentTimeMillis();
+                                if (reviewPostResponse.statusCode() == 201
+                                        && reviewPostResponse1.statusCode() == 201
+                                        && reviewPostResponse2.statusCode() == 201
+                                        && postResponse.statusCode() == 201) {
                                     success = true;
                                 }
                                 responses.add(new Response(postStartTime, "POST", postEndTime - postStartTime, postResponse.statusCode()));
-                                responses.add(new Response(getStartTime, "GET", getEndTime - getStartTime, getResponse.statusCode()));
+                                responses.add(new Response(getStartTimeLike1, "POST", getEndTimeLike1 - getStartTimeLike1, reviewPostResponse1.statusCode()));
+                                responses.add(new Response(getStartTimeLike1, "POST", getEndTimeLike2 - getStartTimeLike2, reviewPostResponse2.statusCode()));
+                                responses.add(new Response(getStartTimeLike1, "POST", getEndTimeDislike1 - getStartTimeDislike1, reviewPostResponse2.statusCode()));
                             } catch (IOException | InterruptedException e) {
                                 retryCount++;
                             }
@@ -130,11 +153,6 @@ public class Client2 {
                 .mapToLong(Response::getLatency)
                 .sorted().toArray();
 
-        long[] getLatencies = responses.stream()
-                .filter(r -> r.getRequestType().equals("GET"))
-                .mapToLong(Response::getLatency)
-                .sorted().toArray();
-
         int totalRequests = responses.size();
         long wallTime = (endTime - startTime) / 1000;
         double totalLatency = responses.stream().mapToLong(Response::getLatency).sum();
@@ -145,17 +163,13 @@ public class Client2 {
         double maxResponseTime = responses.stream().mapToLong(Response::getLatency).max().orElse(0);
         double minResponseTimePOST = responses.stream().filter(r -> r.getRequestType().equals("POST")).mapToLong(Response::getLatency).min().orElse(0);
         double maxResponseTimePOST = responses.stream().filter(r -> r.getRequestType().equals("POST")).mapToLong(Response::getLatency).max().orElse(0);
-        double minResponseTimeGET = responses.stream().filter(r -> r.getRequestType().equals("GET")).mapToLong(Response::getLatency).min().orElse(0);
-        double maxResponseTimeGET = responses.stream().filter(r -> r.getRequestType().equals("GET")).mapToLong(Response::getLatency).max().orElse(0);
         double successfulRequests = responses.stream().filter(r -> r.getStatusCode() == 200 || r.getStatusCode() == 201).count();
-        double meanGetLatency = getLatencies.length > 0 ? (double) Arrays.stream(getLatencies).sum() / getLatencies.length : 0;
         double meanPostLatency = postLatencies.length > 0 ? (double) Arrays.stream(postLatencies).sum() / postLatencies.length : 0;
-        double medianGetLatency = getLatencies.length > 0 ? getLatencies[(int) (getLatencies.length / 2)] : 0;
         double medianPostLatency = postLatencies.length > 0 ? postLatencies[(int) (postLatencies.length / 2)] : 0;
-        double p99GetLatency = getLatencies.length > 0 ? getLatencies[(int) (getLatencies.length * 0.99)] : 0;
         double p99PostLatency = postLatencies.length > 0 ? postLatencies[(int) (postLatencies.length * 0.99)] : 0;
 
-        System.out.println("Config Used: "+ "\nGroup size: " + threadGroupSize + ", Number of groups: " + numThreadGroups + ", Delay: " + delay + ", IP Address: " + IPAddr);
+//        double mean
+
         System.out.println("Total requests: " + totalRequests);
         System.out.println("Successful requests: " + successfulRequests);
         System.out.println("Unsuccessful requests: " + (totalRequests - successfulRequests));
@@ -173,12 +187,6 @@ public class Client2 {
         System.out.println("99th percentile POST latency: " + p99PostLatency + " ms");
         System.out.println("Min response time POST: " + minResponseTimePOST + " ms");
         System.out.println("Max response time POST: " + maxResponseTimePOST + " ms\n\n");
-        System.out.println("GET request statistics:\n");
-        System.out.println("Mean GET latency: " + meanGetLatency + " ms");
-        System.out.println("Median GET latency: " + medianGetLatency + " ms");
-        System.out.println("99th percentile GET latency: " + p99GetLatency + " ms");
-        System.out.println("Min response time GET: " + minResponseTimeGET + " ms");
-        System.out.println("Max response time GET: " + maxResponseTimeGET + " ms");
 
         FileWriter outputFile = new FileWriter("./src/main/resources/Client2Output.csv");
         CSVWriter writer = new CSVWriter(outputFile);
