@@ -12,7 +12,7 @@ public class RabbitMQConnectionFactory {
 
     static {
         factory = new ConnectionFactory();
-        factory.setHost("ec2-54-190-50-155.us-west-2.compute.amazonaws.com");
+        factory.setHost("ec2-54-186-160-139.us-west-2.compute.amazonaws.com");
         factory.setPort(5672);
         try {
             connection = factory.newConnection();

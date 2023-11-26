@@ -49,22 +49,7 @@ public class Client1 {
         String QUEUE_NAME = "HW3";
         ConnectionFactory factory = new ConnectionFactory();
 
-        // Setting up RabbitMQ connection
-        factory.setHost("ec2-54-190-50-155.us-west-2.compute.amazonaws.com");
-        factory.setPort(5672);
-        Connection connection = null;
-        Channel channel = null;
-
-        try {
-            connection = factory.newConnection();
-            channel = connection.createChannel();
-            channel.queueDeclare(QUEUE_NAME, false, false, false, null);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
         for (int i = 0; i < 10; i++) {
-            final Channel channelCopy = channel;
             Thread thread = new Thread(() -> {
                 for (int j = 0; j < 10; j++) {
                     int retryCount = 0;
@@ -98,7 +83,6 @@ public class Client1 {
 
         for (int group = 0; group < numThreadGroups; group++) {
             for (int i = 0; i < threadGroupSize; i++) {
-                final Channel channelCopy = channel;
                 String finalIPAddr = IPAddr;
                 Thread thread = new Thread(() -> {
                     for (int j = 0; j < 100; j++) {
@@ -159,13 +143,6 @@ public class Client1 {
         System.out.println("Total requests: " + totalRequests);
         System.out.println("Wall time: " + wallTime + " seconds");
         System.out.println("Throughput: " + (double) totalRequests / wallTime + " requests/second");
-
-        try {
-            channel.close();
-            connection.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     public static void main(String[] args) {
