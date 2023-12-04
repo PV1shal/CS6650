@@ -99,7 +99,7 @@ public class Client1 {
                                         .POST(HttpRequest.BodyPublishers.ofString(""))
                                         .build();
                                 HttpRequest disLikeRequest = HttpRequest.newBuilder()
-                                        .uri(java.net.URI.create(finalIPAddr + "reviews/like/" + id))
+                                        .uri(java.net.URI.create(finalIPAddr + "reviews/dislike/" + id))
                                         .header("Content-Type", "application/json")
                                         .POST(HttpRequest.BodyPublishers.ofString(""))
                                         .build();
